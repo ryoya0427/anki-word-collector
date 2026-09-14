@@ -1,0 +1,14 @@
+# 개인 학습 데이터
+anki_words.tsv
+anki_words.lock
+
+# Python / PyInstaller 생성물
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.spec
+work/
+
+# 이전 실행 파일
+AnkiWordCollector.exe

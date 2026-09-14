@@ -1,4 +1,4 @@
-name: Publish Windows release
+name: Publish application release
 
 on:
   push:
@@ -13,16 +13,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create release and attach Windows executable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build Android APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Name Android APK for download
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk outputs/AnkiWordCollector_Android.apk
+      - name: Create release and attach apps
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }} — 다국어 지원
           body: |
-            ## 다국어 입력 지원
+            ## Windows · Android 앱
 
             - 일본어·중국어·러시아어·아랍어·힌디어 자동 감지
             - 영어·스페인어·프랑스어·독일어 등은 입력 언어 선택 가능
             - 조회 결과를 Anki용 TSV에 자동 저장
 
-            `AnkiWordCollector_Multilingual.exe`를 다운로드해 실행하세요. Python 설치는 필요 없습니다.
-          files: outputs/AnkiWordCollector_Multilingual.exe
+            - Windows: `AnkiWordCollector_Multilingual.exe`
+            - Android: `AnkiWordCollector_Android.apk` — 단어 수집과 기사시험 개념 노트 지원
+
+            Android는 APK를 내려받은 뒤 설치를 허용하면 됩니다. 앱에서 **TSV 내보내기**를 누르면 Anki로 가져올 파일을 저장할 수 있습니다. 기사시험 개념 노트는 별도 TSV로 내보냅니다.
+          files: |
+            outputs/AnkiWordCollector_Multilingual.exe
+            outputs/AnkiWordCollector_Android.apk

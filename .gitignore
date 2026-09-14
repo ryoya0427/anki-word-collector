@@ -9,6 +9,10 @@ build/
 dist/
 *.spec
 work/
+android/local.properties
+android/.gradle/
+android/build/
+android/app/build/
 
 # 이전 실행 파일
 AnkiWordCollector.exe

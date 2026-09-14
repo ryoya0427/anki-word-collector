@@ -1,7 +1,7 @@
 """Anki 단어 수집기. Python 3.10+, standard library only.
 
 Run: py anki_word_collector.py
-Translation: MyMemory GET API (English -> Korean), no API key.
+Translation: MyMemory GET API (selected language -> Korean), no API key.
 """
 import html
 import json
@@ -76,10 +76,45 @@ class WordStore:
         self.rows = rows
 
 
-def translate(word):
+LANGUAGE_CHOICES = {
+    '자동 감지': None,
+    '영어': 'en',
+    '일본어': 'ja',
+    '중국어': 'zh-CN',
+    '스페인어': 'es',
+    '프랑스어': 'fr',
+    '독일어': 'de',
+    '러시아어': 'ru',
+    '아랍어': 'ar',
+    '힌디어': 'hi',
+}
+
+
+def detect_source_language(text):
+    """Detect scripts that have an unambiguous source language for this app."""
+    if any('\u3040' <= char <= '\u30ff' for char in text):
+        return 'ja'
+    if any('\uac00' <= char <= '\ud7af' for char in text):
+        return 'ko'
+    if any('\u4e00' <= char <= '\u9fff' for char in text):
+        return 'zh-CN'
+    if any('\u0400' <= char <= '\u052f' for char in text):
+        return 'ru'
+    if any('\u0600' <= char <= '\u06ff' for char in text):
+        return 'ar'
+    if any('\u0900' <= char <= '\u097f' for char in text):
+        return 'hi'
+    # Latin-script languages need the selector because script detection cannot
+    # reliably distinguish English, Spanish, French, and German.
+    return 'en'
+
+
+def translate(word, source='en'):
     if len(word.encode('utf-8')) > 500:
         raise ValueError('자동 조회는 500바이트 이하만 가능합니다. 뜻을 직접 입력해 주세요.')
-    query = urllib.parse.urlencode({'q': word, 'langpair': 'en|ko'})
+    if source == 'ko':
+        return word
+    query = urllib.parse.urlencode({'q': word, 'langpair': f'{source}|ko'})
     request = urllib.request.Request(
         'https://api.mymemory.translated.net/get?' + query,
         headers={'User-Agent': 'AnkiWordCollector/1.0'})
@@ -126,15 +161,17 @@ STUDY_HINTS = {
 }
 
 
-def translate_with_breakdown(text, translator=None):
+def translate_with_breakdown(text, translator=None, source='en'):
     """Translate the whole input, then show small phrase units for study."""
-    hint = STUDY_HINTS.get(clean(text).casefold()) if translator is None else None
+    hint = STUDY_HINTS.get(clean(text).casefold()) if source == 'en' and translator is None else None
     if hint is not None:
         whole, parts = hint
         return f'전체: {whole} | 표현 나누기: ' + '; '.join(
             f'{chunk} = {meaning}' for chunk, meaning in parts)
-    translator = translator or translate
+    translator = translator or (lambda value: translate(value, source))
     whole = translator(text)
+    if source != 'en':
+        return whole
     chunks = expression_chunks(text)
     if not chunks:
         return whole
@@ -159,6 +196,7 @@ class App:
         self.pending = False
         self.closed = False
         self.word = tk.StringVar()
+        self.language_name = tk.StringVar(value='자동 감지')
         self.status = tk.StringVar(value='영어 입력 → Enter로 조회하면 뜻을 표시하고 자동 저장합니다.')
         self.count = tk.StringVar()
         self.topmost = tk.BooleanVar(value=False)
@@ -174,7 +212,13 @@ class App:
         ttk.Label(title, text='Anki 단어 수집기', font=('맑은 고딕', 16, 'bold')).pack(side='left')
         ttk.Checkbutton(title, text='항상 위', variable=self.topmost,
                         command=lambda: root.attributes('-topmost', self.topmost.get())).pack(side='right')
-        ttk.Label(frame, text='영어 단어 또는 표현').grid(row=1, column=0, sticky='w')
+        input_header = ttk.Frame(frame)
+        input_header.grid(row=1, column=0, sticky='ew')
+        ttk.Label(input_header, text='단어 또는 표현').pack(side='left')
+        ttk.Label(input_header, text='입력 언어:').pack(side='right', padx=(10, 4))
+        self.language_box = ttk.Combobox(input_header, textvariable=self.language_name,
+                                         values=list(LANGUAGE_CHOICES), state='readonly', width=12)
+        self.language_box.pack(side='right')
         entry_frame = ttk.Frame(frame)
         entry_frame.grid(row=2, column=0, sticky='ew', pady=(5, 10))
         entry_frame.columnconfigure(0, weight=1)
@@ -203,7 +247,7 @@ class App:
         self.tree.configure(yscrollcommand=scroll.set)
         self.tree.pack(side='left', fill='both', expand=True)
         scroll.pack(side='right', fill='y')
-        ttk.Label(frame, text='번역: MyMemory 무료 API · 입력한 영어를 외부 서비스로 전송',
+        ttk.Label(frame, text='번역: MyMemory 무료 API · 입력한 단어·표현을 외부 서비스로 전송',
                   wraplength=580).grid(row=9, column=0, sticky='w', pady=(8, 3))
         ttk.Label(frame, text=f'저장 파일: {path}', wraplength=580).grid(row=10, column=0, sticky='w')
         self.entry.bind('<Return>', self.enter_word)
@@ -229,6 +273,10 @@ class App:
     def text(self):
         return self.meaning.get('1.0', 'end-1c').strip()
 
+    def source_language(self, text):
+        selected = LANGUAGE_CHOICES[self.language_name.get()]
+        return selected or detect_source_language(text)
+
     def enter_word(self, event=None):
         if self.text():
             self.save()
@@ -253,12 +301,13 @@ class App:
         self.invalidate()
         token = self.generation
         original = self.text()
+        source = self.source_language(word)
         self.pending = True
         self.lookup_button.configure(state='disabled')
-        self.status.set('MyMemory 조회 중… 기다리는 동안 뜻을 직접 입력하고 저장할 수도 있습니다.')
+        self.status.set(f'MyMemory 조회 중… 입력 언어: {source} · 기다리는 동안 뜻을 직접 입력하고 저장할 수도 있습니다.')
         def worker():
             try:
-                self.messages.put((token, original, translate_with_breakdown(word), None))
+                self.messages.put((token, original, translate_with_breakdown(word, source=source), None))
             except Exception as error:
                 self.messages.put((token, original, None, str(error)))
         threading.Thread(target=worker, daemon=True).start()

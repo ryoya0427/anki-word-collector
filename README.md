@@ -4,9 +4,9 @@
 
 ## 실행
 
-`AnkiWordCollector_AutoSave.exe`를 실행하세요. Python 설치는 필요하지 않습니다.
+`AnkiWordCollector_Multilingual.exe`를 실행하세요. Python 설치는 필요하지 않습니다.
 
-영어 단어나 표현을 입력하고 Enter를 누르면 뜻이 표시되며, 같은 폴더의 `anki_words.tsv`에 자동 저장됩니다. 저장된 TSV 파일은 Anki의 **파일 → 가져오기**에서 탭 구분 파일로 불러올 수 있습니다.
+영어·일본어·중국어 등 단어나 표현을 입력하고 Enter를 누르면 뜻이 표시되며, 같은 폴더의 `anki_words.tsv`에 자동 저장됩니다. 저장된 TSV 파일은 Anki의 **파일 → 가져오기**에서 탭 구분 파일로 불러올 수 있습니다.
 
 ## 번역
 
